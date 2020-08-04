@@ -128,14 +128,14 @@ class MultiHeadAttentionNoLastDense(nn.Module):
         key = x.view(batch_size * x.size(1), self.heads_number, self.head_size)
         value = x.view(batch_size, -1, self.heads_number, self.head_size)
         _, self.alignment = innerKeyValueAttention(self.query, key, value)
-        return self.alignment
+        return self.alignment  # 得到展平的线
 
     def forward(self, x):
         batch_size = x.size(0)
         key = x.view(batch_size * x.size(1), self.heads_number, self.head_size)
         value = x.view(batch_size, -1, self.heads_number, self.head_size)
         x, self.alignment = innerKeyValueAttention(self.query, key, value)
-        return x.view(x.size(0), -1), copy.copy(self.alignment)
+        return x.view(x.size(0), -1), copy.copy(self.alignment)  # -1代表大小可以推断出来
 
 
 class DoubleMHA(nn.Module):

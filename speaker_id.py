@@ -23,9 +23,11 @@ import sys
 import numpy as np
 from dnn_models import MLP, flip
 from dnn_models import SincNet as CNN  # 注意这里CNN是指的SincNet
+from poolings import DoubleMHA
 from data_io import ReadList, read_conf, str_to_bool
 
 
+# 获取数据的函数
 def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, fact_amp):
     # Initialization of the minibatch (batch_size,[0=>x_t,1=>x_t+N,1=>random_samp])
     sig_batch = np.zeros([batch_size, wlen])
@@ -161,6 +163,9 @@ CNN_arch = {'input_dim': wlen,
 CNN_net = CNN(CNN_arch)
 CNN_net.cuda()
 
+# 建立注意力机制 TODO
+AttentionModule = DoubleMHA(CNN_net.out_dim, 16)
+
 # Loading label dictionary
 lab_dict = np.load(class_dict_file).item()
 
@@ -207,19 +212,24 @@ for epoch in range(N_epochs):
 
     test_flag = 0
     CNN_net.train()  # 这里因为里面包含了的dropout和batchnorm，因此需要指明是在训练还是在验证，在训练时则要.train,在验证时要.eval
-    DNN1_net.train() # 注意要在自动forward之前
+    DNN1_net.train()  # 注意要在自动forward之前
     DNN2_net.train()
 
     loss_sum = 0
     err_sum = 0
 
     for i in range(N_batches):  # 处理一批
+        # 获取数据
         [inp, lab] = create_batches_rnd(batch_size, data_folder, wav_lst_tr, snt_tr, wlen, lab_dict, 0.2)
-        pout = DNN2_net(DNN1_net(CNN_net(inp)))  #就这样训练完毕了
+
+        # 进行训练
+        output = CNN_net(inp)
+        output, alignment = AttentionModule(output)
+        pout = DNN2_net(DNN1_net(output))
 
         pred = torch.max(pout, dim=1)[1]
-        #在分类问题中，通常需要使用max()函数对softmax函数的输出值进行操作，求出预测值索引 。
-        #将输出最大值在向量中的索引以及最大值是谁。这里（计算准确率）不需要最大值是谁，只需要直到其索引，因此[1]
+        # 在分类问题中，通常需要使用max()函数对softmax函数的输出值进行操作，求出预测值索引 。
+        # 将输出最大值在向量中的索引以及最大值是谁。这里（计算准确率）不需要最大值是谁，只需要直到其索引，因此[1]
         loss = cost(pout, lab.long())
         err = torch.mean((pred != lab.long()).float())
         # 优化
