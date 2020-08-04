@@ -206,8 +206,8 @@ optimizer_DNN2 = optim.RMSprop(DNN2_net.parameters(), lr=lr, alpha=0.95, eps=1e-
 for epoch in range(N_epochs):
 
     test_flag = 0
-    CNN_net.train()
-    DNN1_net.train()
+    CNN_net.train()  # 这里因为里面包含了的dropout和batchnorm，因此需要指明是在训练还是在验证，在训练时则要.train,在验证时要.eval
+    DNN1_net.train() # 注意要在自动forward之前
     DNN2_net.train()
 
     loss_sum = 0
@@ -215,12 +215,14 @@ for epoch in range(N_epochs):
 
     for i in range(N_batches):  # 处理一批
         [inp, lab] = create_batches_rnd(batch_size, data_folder, wav_lst_tr, snt_tr, wlen, lab_dict, 0.2)
-        pout = DNN2_net(DNN1_net(CNN_net(inp)))
+        pout = DNN2_net(DNN1_net(CNN_net(inp)))  #就这样训练完毕了
 
         pred = torch.max(pout, dim=1)[1]
+        #在分类问题中，通常需要使用max()函数对softmax函数的输出值进行操作，求出预测值索引 。
+        #将输出最大值在向量中的索引以及最大值是谁。这里（计算准确率）不需要最大值是谁，只需要直到其索引，因此[1]
         loss = cost(pout, lab.long())
         err = torch.mean((pred != lab.long()).float())
-
+        # 优化
         optimizer_CNN.zero_grad()
         optimizer_DNN1.zero_grad()
         optimizer_DNN2.zero_grad()
@@ -239,7 +241,7 @@ for epoch in range(N_epochs):
     # Full Validation  new
     if epoch % N_eval_epoch == 0:  # 每8个写入到文件一下
 
-        CNN_net.eval()
+        CNN_net.eval()  # 说明是在验证
         DNN1_net.eval()
         DNN2_net.eval()
         test_flag = 1

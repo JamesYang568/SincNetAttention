@@ -270,7 +270,7 @@ class MLP(nn.Module):  # 也就是DNN模型
         if self.fc_use_laynorm_inp:
             self.ln0 = LayerNorm(self.input_dim)
 
-        # input batch normalization    
+        # input batch normalization
         if self.fc_use_batchnorm_inp:
             self.bn0 = nn.BatchNorm1d([self.input_dim], momentum=0.05)
 
