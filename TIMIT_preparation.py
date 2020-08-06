@@ -15,7 +15,6 @@
 
 # NOTE: This script expects filenames in lowercase (e.g, train/dr1/fcjf0/si1027.wav" rather than "TRAIN/DR1/FCJF0/SI1027.WAV)
 
-
 import shutil
 import os
 import soundfile as sf
@@ -72,7 +71,7 @@ for i in range(len(list_sig)):
     signal = signal[beg_sig:end_sig]
 
     # Save normalized speech
-    file_out = out_folder + '/' + list_sig[i]
+    file_out = (out_folder + '/' + list_sig[i]).replace('/', '\\')  # 这里可以修改以适应Windows目录格式
 
     sf.write(file_out, signal, fs)
 
