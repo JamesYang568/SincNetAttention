@@ -29,13 +29,14 @@ from data_io import ReadList, read_conf, str_to_bool
 
 # 获取数据的函数
 def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, fact_amp):
-    # Initialization of the minibatch (batch_size,[0=>x_t,1=>x_t+N,1=>random_samp])
-    sig_batch = np.zeros([batch_size, wlen])
+    # 一批大小，数据文件夹，文件名单，名单长度，宽度，字典，振幅
+    # Initialization of the minibatch (batch_size,[0=>x_t,1=>x_t+N,1=>random_samp])  随机获取128个片段
+    sig_batch = np.zeros([batch_size, wlen])  # 转换成128*wlen的矩阵
     lab_batch = np.zeros(batch_size)
 
-    snt_id_arr = np.random.randint(N_snt, size=batch_size)
+    snt_id_arr = np.random.randint(N_snt, size=batch_size)  # 获取小于N_snt的128个向量
 
-    rand_amp_arr = np.random.uniform(1.0 - fact_amp, 1 + fact_amp, batch_size)
+    rand_amp_arr = np.random.uniform(1.0 - fact_amp, 1 + fact_amp, batch_size)  # 获取在振幅两侧的随机采样
 
     for i in range(batch_size):
 
@@ -55,8 +56,8 @@ def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, 
             print('WARNING: stereo to mono: ' + data_folder + wav_lst[snt_id_arr[i]])
             signal = signal[:, 0]
 
-        sig_batch[i, :] = signal[snt_beg:snt_end] * rand_amp_arr[i]
-        lab_batch[i] = lab_dict[wav_lst[snt_id_arr[i]]]
+        sig_batch[i, :] = signal[snt_beg:snt_end] * rand_amp_arr[i]  # 片段的内容
+        lab_batch[i] = lab_dict[wav_lst[snt_id_arr[i]]]  # 得到随机选择的片段信息dict
 
     inp = Variable(torch.from_numpy(sig_batch).float().cuda().contiguous())
     lab = Variable(torch.from_numpy(lab_batch).float().cuda().contiguous())
@@ -218,8 +219,8 @@ for epoch in range(N_epochs):
     loss_sum = 0
     err_sum = 0
 
-    for i in range(N_batches):  # 处理一批
-        # 获取数据
+    for i in range(N_batches):  # 处理一批  for循环一共有800批
+        # 获取数据  batch_size = 128
         [inp, lab] = create_batches_rnd(batch_size, data_folder, wav_lst_tr, snt_tr, wlen, lab_dict, 0.2)
 
         # 进行训练
@@ -259,7 +260,7 @@ for epoch in range(N_epochs):
         err_sum = 0
         err_sum_snt = 0
 
-        with torch.no_grad():
+        with torch.no_grad():  # 由于是三个不同的模型拼装所以no_grad上下文不再自动进行梯度下降
             for i in range(snt_te):
 
                 # [fs,signal]=scipy.io.wavfile.read(data_folder+wav_lst_te[i])

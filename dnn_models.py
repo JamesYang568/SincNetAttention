@@ -160,7 +160,7 @@ class sinc_conv(nn.Module):
     def __init__(self, N_filt, Filt_dim, fs):
         super(sinc_conv, self).__init__()
 
-        # Mel Initialization of the filterbanks
+        # Mel Initialization of the filterbanks  初始化滤波器组
         low_freq_mel = 80
         high_freq_mel = (2595 * np.log10(1 + (fs / 2) / 700))  # Convert Hz to Mel
         mel_points = np.linspace(low_freq_mel, high_freq_mel, N_filt)  # Equally spaced in Mel scale
@@ -183,8 +183,8 @@ class sinc_conv(nn.Module):
         N = self.Filt_dim
         t_right = Variable(torch.linspace(1, (N - 1) / 2, steps=int((N - 1) / 2)) / self.fs).cuda()
 
-        min_freq = 50.0;
-        min_band = 50.0;
+        min_freq = 50.0
+        min_band = 50.0
 
         filt_beg_freq = torch.abs(self.filt_b1) + min_freq / self.freq_scale
         filt_end_freq = filt_beg_freq + (torch.abs(self.filt_band) + min_band / self.freq_scale)
@@ -192,7 +192,7 @@ class sinc_conv(nn.Module):
         n = torch.linspace(0, N, steps=N)
 
         # Filter window (hamming)
-        window = 0.54 - 0.46 * torch.cos(2 * math.pi * n / N);
+        window = 0.54 - 0.46 * torch.cos(2 * math.pi * n / N)
         window = Variable(window.float().cuda())
 
         for i in range(self.N_filt):
@@ -348,9 +348,9 @@ class SincNet(nn.Module):
     def __init__(self, options):
         super(SincNet, self).__init__()
 
-        self.cnn_N_filt = options['cnn_N_filt']
-        self.cnn_len_filt = options['cnn_len_filt']
-        self.cnn_max_pool_len = options['cnn_max_pool_len']
+        self.cnn_N_filt = options['cnn_N_filt']  # 卷积核个数
+        self.cnn_len_filt = options['cnn_len_filt']  # 大小
+        self.cnn_max_pool_len = options['cnn_max_pool_len']  # pooling核的大小
 
         self.cnn_act = options['cnn_act']
         self.cnn_drop = options['cnn_drop']
@@ -362,7 +362,7 @@ class SincNet(nn.Module):
 
         self.input_dim = int(options['input_dim'])
 
-        self.fs = options['fs']
+        self.fs = options['fs']  # Mel使用的窗口大小
 
         self.N_cnn_lay = len(options['cnn_N_filt'])  # 3层
         self.conv = nn.ModuleList([])
