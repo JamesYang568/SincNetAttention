@@ -26,6 +26,8 @@ from dnn_models import SincNet as CNN  # 注意这里CNN是指的SincNet
 from poolings import DoubleMHA
 from data_io import ReadList, read_conf, str_to_bool
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 # 获取数据的函数
 def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, fact_amp):
@@ -162,13 +164,15 @@ CNN_arch = {'input_dim': wlen,
             }
 
 CNN_net = CNN(CNN_arch)
-CNN_net.cuda()
+CNN_net.to(device)
 
 # 建立注意力机制 TODO
-AttentionModule = DoubleMHA(CNN_net.out_dim, 16)
+print(CNN_net.out_dim)
+AttentionModule = DoubleMHA(CNN_net.out_dim, 20)
+# 修改这里保证pooling中assert self.encoder_size % heads_number == 0  # d_model 可以通过
 
 # Loading label dictionary
-lab_dict = np.load(class_dict_file).item()
+lab_dict = np.load(class_dict_file, allow_pickle=True).item()
 
 DNN1_arch = {'input_dim': CNN_net.out_dim,
              'fc_lay': fc_lay,
@@ -181,7 +185,7 @@ DNN1_arch = {'input_dim': CNN_net.out_dim,
              }
 
 DNN1_net = MLP(DNN1_arch)  # 三次循环
-DNN1_net.cuda()
+DNN1_net.to(device)
 
 DNN2_arch = {'input_dim': fc_lay[-1],
              'fc_lay': class_lay,
@@ -194,7 +198,7 @@ DNN2_arch = {'input_dim': fc_lay[-1],
              }
 
 DNN2_net = MLP(DNN2_arch)  # 1次循环
-DNN2_net.cuda()
+DNN2_net.to(device)
 
 # 批处理
 if pt_file != 'none':
