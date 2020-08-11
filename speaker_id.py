@@ -61,8 +61,8 @@ def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, 
         sig_batch[i, :] = signal[snt_beg:snt_end] * rand_amp_arr[i]  # 片段的内容
         lab_batch[i] = lab_dict[wav_lst[snt_id_arr[i]]]  # 得到随机选择的片段信息dict
 
-    inp = Variable(torch.from_numpy(sig_batch).float().cuda().contiguous())
-    lab = Variable(torch.from_numpy(lab_batch).float().cuda().contiguous())
+    inp = Variable(torch.from_numpy(sig_batch).float().contiguous())
+    lab = Variable(torch.from_numpy(lab_batch).float().contiguous())
 
     return inp, lab
 
@@ -167,8 +167,8 @@ CNN_net = CNN(CNN_arch)
 CNN_net.to(device)
 
 # 建立注意力机制 TODO
-print(CNN_net.out_dim)
-AttentionModule = DoubleMHA(CNN_net.out_dim, 20)
+# print(CNN_net.out_dim) 6420
+AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
 # 修改这里保证pooling中assert self.encoder_size % heads_number == 0  # d_model 可以通过
 
 # Loading label dictionary
@@ -229,7 +229,17 @@ for epoch in range(N_epochs):
 
         # 进行训练
         output = CNN_net(inp)
-        output, alignment = AttentionModule(output)
+        # under deprecate
+        # print(output.shape) [128, 6420]  128条片段，每个是6420的
+        # o1, o3 = output.split([1, 1], dim=1)  # 切割列
+        #temp = torch.full((128, 1), fill_value=20,dtype = torch.int)  全为20的向量
+        # output = torch.cat((output,temp), dim=1) 这个是在现有维度上进行拼接
+        # 扩大数据，使符合条件
+        output = output.unsqueeze(dim = 0)  # 得到【1,128,6420】
+        output = output.repeat(20,1,1)  # repeat重复对应的位置多少遍（乘以多少），如果是1则乘以1，不变。  这样得到[20,128,6420]
+        output = output.permute(1,0,2)  # permute交换维度，新的维度就是从左向右的，而对应位置的数字则是原来这个维度的位置
+
+        output, alignment = AttentionModule(output)  # output shape [128, 321]
         pout = DNN2_net(DNN1_net(output))
 
         pred = torch.max(pout, dim=1)[1]
@@ -272,7 +282,7 @@ for epoch in range(N_epochs):
 
                 [signal, fs] = sf.read(data_folder + wav_lst_te[i])
 
-                signal = torch.from_numpy(signal).float().cuda().contiguous()
+                signal = torch.from_numpy(signal).float().contiguous()
                 lab_batch = lab_dict[wav_lst_te[i]]
 
                 # split signals into chunks
@@ -281,9 +291,9 @@ for epoch in range(N_epochs):
 
                 N_fr = int((signal.shape[0] - wlen) / (wshift))
 
-                sig_arr = torch.zeros([Batch_dev, wlen]).float().cuda().contiguous()
-                lab = Variable((torch.zeros(N_fr + 1) + lab_batch).cuda().contiguous().long())
-                pout = Variable(torch.zeros(N_fr + 1, class_lay[-1]).float().cuda().contiguous())
+                sig_arr = torch.zeros([Batch_dev, wlen]).float().contiguous()
+                lab = Variable((torch.zeros(N_fr + 1) + lab_batch).contiguous().long())
+                pout = Variable(torch.zeros(N_fr + 1, class_lay[-1]).float().contiguous())
                 count_fr = 0
                 count_fr_tot = 0
                 while end_samp < signal.shape[0]:
@@ -296,7 +306,7 @@ for epoch in range(N_epochs):
                         inp = Variable(sig_arr)
                         pout[count_fr_tot - Batch_dev:count_fr_tot, :] = DNN2_net(DNN1_net(CNN_net(inp)))
                         count_fr = 0
-                        sig_arr = torch.zeros([Batch_dev, wlen]).float().cuda().contiguous()
+                        sig_arr = torch.zeros([Batch_dev, wlen]).float().contiguous()
 
                 if count_fr > 0:
                     inp = Variable(sig_arr[0:count_fr])

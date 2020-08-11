@@ -16,6 +16,7 @@ def new_parameter(*size):
     return out
 
 
+# deprecate
 class Attention(nn.Module):
 
     def __init__(self, embedding_size):
@@ -44,7 +45,7 @@ class HeadAttention(nn.Module):
 
     def __maskAttention(self, attention_score, mask_value=-float('inf')):
 
-        mask = torch.cuda.FloatTensor(attention_score.size()).random_(self.mask_prob) > 0
+        mask = torch.FloatTensor(attention_score.size()).random_(self.mask_prob) > 0  # 修改
         attention_score[~mask] = mask_value
         return attention_score
 
@@ -88,6 +89,7 @@ def innerKeyValueAttention(query, key, value):
     return ct, p_attn
 
 
+# deprecate
 class MultiHeadAttention(nn.Module):
     def __init__(self, encoder_size, heads_number):
         super(MultiHeadAttention, self).__init__()
@@ -131,9 +133,11 @@ class MultiHeadAttentionNoLastDense(nn.Module):
         return self.alignment  # 得到展平的线
 
     def forward(self, x):
-        batch_size = x.size(0)
-        key = x.view(batch_size * x.size(1), self.heads_number, self.head_size)
-        value = x.view(batch_size, -1, self.heads_number, self.head_size)
+        batch_size = x.size(0)  # batch_size = 128  x.size(1) = 6420
+        # TODO 核心修改部分  需要将传入的张量改为#batch，heads，6420的格式
+        # print(self.head_size,self.heads_number,self.encoder_size)  [321,20,6420]
+        key = x.contiguous().view(batch_size * x.size(1), self.heads_number, self.head_size)  # 增加contiguous从而可以跨维度变化
+        value = x.contiguous().view(batch_size, -1, self.heads_number, self.head_size)
         x, self.alignment = innerKeyValueAttention(self.query, key, value)
         return x.view(x.size(0), -1), copy.copy(self.alignment)  # -1代表大小可以推断出来
 
@@ -155,6 +159,9 @@ class DoubleMHA(nn.Module):
 
     def forward(self, x):
         utteranceRepresentation, alignment = self.utteranceAttention(x)
+        # print(alignment.shape)  [128, 20, 20]
+        # print(utteranceRepresentation.shape)   [128, 6420]
         compressedRepresentation = self.headsAttention(
             utteranceRepresentation.view(utteranceRepresentation.size(0), self.heads_number, self.heads_size))[0]
+        # print(compressedRepresentation.shape)  [128, 321]
         return compressedRepresentation, alignment
