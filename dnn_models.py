@@ -311,6 +311,7 @@ class MLP(nn.Module):  # 也就是DNN模型
     def forward(self, x):
 
         # Applying Layer/Batch Norm
+        # print(x.shape)  [128, 321]
         if bool(self.fc_use_laynorm_inp):
             x = self.ln0((x))
 
@@ -372,7 +373,7 @@ class SincNet(nn.Module):
         self.drop = nn.ModuleList([])
 
         if self.cnn_use_laynorm_inp:
-            self.ln0 = LayerNorm(self.input_dim)
+            self.ln0 = LayerNorm(self.input_dim)  # feed the 321 注意力机制出来的
 
         if self.cnn_use_batchnorm_inp:
             self.bn0 = nn.BatchNorm1d([self.input_dim], momentum=0.05)
@@ -406,7 +407,7 @@ class SincNet(nn.Module):
 
             current_input = int((current_input - self.cnn_len_filt[i] + 1) / self.cnn_max_pool_len[i])
 
-        self.out_dim = current_input * N_filt
+        self.out_dim = current_input * N_filt  # fs * cw_len / 1000.00(即wlen=16*200)*[80,60,60]输出维度
 
     def forward(self, x):
         batch = x.shape[0]

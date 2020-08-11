@@ -174,7 +174,8 @@ AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
 # Loading label dictionary
 lab_dict = np.load(class_dict_file, allow_pickle=True).item()
 
-DNN1_arch = {'input_dim': CNN_net.out_dim,
+# print(CNN_net.out_dim)  6420
+DNN1_arch = {'input_dim': 321,  # CNN_net.out_dim  where 321 means after attention machine dim
              'fc_lay': fc_lay,
              'fc_drop': fc_drop,
              'fc_use_batchnorm': fc_use_batchnorm,
@@ -232,15 +233,17 @@ for epoch in range(N_epochs):
         # under deprecate
         # print(output.shape) [128, 6420]  128条片段，每个是6420的
         # o1, o3 = output.split([1, 1], dim=1)  # 切割列
-        #temp = torch.full((128, 1), fill_value=20,dtype = torch.int)  全为20的向量
+        # temp = torch.full((128, 1), fill_value=20,dtype = torch.int)  全为20的向量
         # output = torch.cat((output,temp), dim=1) 这个是在现有维度上进行拼接
         # 扩大数据，使符合条件
-        output = output.unsqueeze(dim = 0)  # 得到【1,128,6420】
-        output = output.repeat(20,1,1)  # repeat重复对应的位置多少遍（乘以多少），如果是1则乘以1，不变。  这样得到[20,128,6420]
-        output = output.permute(1,0,2)  # permute交换维度，新的维度就是从左向右的，而对应位置的数字则是原来这个维度的位置
+        output = output.unsqueeze(dim=0)  # 得到【1,128,6420】
+        output = output.repeat(20, 1, 1)  # repeat重复对应的位置多少遍（乘以多少），如果是1则乘以1，不变。  这样得到[20,128,6420]
+        output = output.permute(1, 0, 2)  # permute交换维度，新的维度就是从左向右的，而对应位置的数字则是原来这个维度的位置
 
         output, alignment = AttentionModule(output)  # output shape [128, 321]
-        pout = DNN2_net(DNN1_net(output))
+        pout = DNN2_net(DNN1_net(output))  # DNN1_net(output).shape = [128, 2048]
+        # pout.shape = [128, 462]
+        # os.system("pause")
 
         pred = torch.max(pout, dim=1)[1]
         # 在分类问题中，通常需要使用max()函数对softmax函数的输出值进行操作，求出预测值索引 。
