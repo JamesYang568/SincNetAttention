@@ -373,7 +373,7 @@ class SincNet(nn.Module):
         self.drop = nn.ModuleList([])
 
         if self.cnn_use_laynorm_inp:
-            self.ln0 = LayerNorm(self.input_dim)  # feed the 321 注意力机制出来的
+            self.ln0 = LayerNorm(self.input_dim)  # feed the dim of 321 注意力机制出来的
 
         if self.cnn_use_batchnorm_inp:
             self.bn0 = nn.BatchNorm1d([self.input_dim], momentum=0.05)
@@ -422,7 +422,7 @@ class SincNet(nn.Module):
 
         x = x.view(batch, 1, seq_len)
 
-        for i in range(self.N_cnn_lay):  # 经过3层
+        for i in range(self.N_cnn_lay):  # 经过3层  这类似于文献 DMHA 中所描述的Norm和FC层，没有进行调整
             # 根据标准化方式进行三选1
             if self.cnn_use_laynorm[i]:  # 需要laynorm标准化时
                 # conv-> maxpool ->ln(标准化) ->激活函数 -> dropout

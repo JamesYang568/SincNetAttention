@@ -45,7 +45,7 @@ class HeadAttention(nn.Module):
 
     def __maskAttention(self, attention_score, mask_value=-float('inf')):
 
-        mask = torch.FloatTensor(attention_score.size()).random_(self.mask_prob) > 0  # 修改
+        mask = torch.FloatTensor(attention_score.size()).random_(self.mask_prob) > 0  # todo 修改cuda
         attention_score[~mask] = mask_value
         return attention_score
 
@@ -134,7 +134,7 @@ class MultiHeadAttentionNoLastDense(nn.Module):
 
     def forward(self, x):
         batch_size = x.size(0)  # batch_size = 128  x.size(1) = 6420
-        # TODO 核心修改部分  需要将传入的张量改为#batch，heads，6420的格式
+        # TODO  需要将传入的张量改为#batch，heads，6420的格式
         # print(self.head_size,self.heads_number,self.encoder_size)  [321,20,6420]
         key = x.contiguous().view(batch_size * x.size(1), self.heads_number, self.head_size)  # 增加contiguous从而可以跨维度变化
         value = x.contiguous().view(batch_size, -1, self.heads_number, self.head_size)

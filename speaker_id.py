@@ -187,7 +187,7 @@ DNN1_arch = {'input_dim': 321,  # CNN_net.out_dim  where 321 means after attenti
 
 DNN1_net = MLP(DNN1_arch)  # 三次循环
 DNN1_net.to(device)
-
+# print(fc_lay[-1]) 2048
 DNN2_arch = {'input_dim': fc_lay[-1],
              'fc_lay': class_lay,
              'fc_drop': class_drop,
@@ -210,14 +210,16 @@ if pt_file != 'none':
 
 # 配置优化器 全部是用的RMSProp
 optimizer_CNN = optim.RMSprop(CNN_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
+optimizer_ATT = optim.RMSprop(AttentionModule.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN1 = optim.RMSprop(DNN1_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN2 = optim.RMSprop(DNN2_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 
 # 开始进行训练，1500次
-for epoch in range(N_epochs):
+for epoch in range(10):  # TODO N_epochs
 
     test_flag = 0
     CNN_net.train()  # 这里因为里面包含了的dropout和batchnorm，因此需要指明是在训练还是在验证，在训练时则要.train,在验证时要.eval
+    AttentionModule.train()
     DNN1_net.train()  # 注意要在自动forward之前
     DNN2_net.train()
 
@@ -252,24 +254,42 @@ for epoch in range(N_epochs):
         err = torch.mean((pred != lab.long()).float())
         # 优化
         optimizer_CNN.zero_grad()
+        optimizer_ATT.zero_grad()
         optimizer_DNN1.zero_grad()
         optimizer_DNN2.zero_grad()
 
         loss.backward()
         optimizer_CNN.step()
+        optimizer_ATT.step()
         optimizer_DNN1.step()
         optimizer_DNN2.step()
 
         loss_sum = loss_sum + loss.detach()
         err_sum = err_sum + err.detach()
+        # if i%10 == 0:  just for test :)
+        #     print('loss sum:' + str(loss_sum.item()))
+        #     print('err sum:' + str(err_sum.item()))
 
     loss_tot = loss_sum / N_batches
     err_tot = err_sum / N_batches
+    # print('loss_totall:' + str(loss_tot.item()))  just for test :)
+    # print('error total:' + str(err_tot.item()))
+    # 最开始是
+    # loss_totall:5.845455169677734
+    # error total:0.9918749928474426
+    # second epoch
+    # loss_totall: 5.143251895904541
+    # error total: 0.9721777439117432
+    # the 4th time
+    # loss_totall: 4.186425685882568
+    # error total: 0.8866991996765137
+    # epoch3, loss_tr = 4.186426  err_tr = 0.886699
 
     # Full Validation  new
     if epoch % N_eval_epoch == 0:  # 每8个写入到文件一下
-
+        # os.system("pause")
         CNN_net.eval()  # 说明是在验证
+        AttentionModule.eval()
         DNN1_net.eval()
         DNN2_net.eval()
         test_flag = 1
@@ -278,7 +298,7 @@ for epoch in range(N_epochs):
         err_sum_snt = 0
 
         with torch.no_grad():  # 由于是三个不同的模型拼装所以no_grad上下文不再自动进行梯度下降
-            for i in range(snt_te):
+            for i in range(snt_te):  # 列表长度
 
                 # [fs,signal]=scipy.io.wavfile.read(data_folder+wav_lst_te[i])
                 # signal=signal.astype(float)/32768
@@ -307,13 +327,22 @@ for epoch in range(N_epochs):
                     count_fr_tot = count_fr_tot + 1
                     if count_fr == Batch_dev:
                         inp = Variable(sig_arr)
-                        pout[count_fr_tot - Batch_dev:count_fr_tot, :] = DNN2_net(DNN1_net(CNN_net(inp)))
+                        # norm the size
+                        temp = CNN_net(inp)
+                        temp = temp.unsqueeze(dim=0)
+                        temp = temp.repeat(20, 1, 1)
+                        temp = temp.permute(1, 0, 2)
+                        pout[count_fr_tot - Batch_dev:count_fr_tot, :] = DNN2_net(DNN1_net(AttentionModule(temp)[0]))
                         count_fr = 0
                         sig_arr = torch.zeros([Batch_dev, wlen]).float().contiguous()
 
                 if count_fr > 0:
                     inp = Variable(sig_arr[0:count_fr])
-                    pout[count_fr_tot - count_fr:count_fr_tot, :] = DNN2_net(DNN1_net(CNN_net(inp)))
+                    temp = CNN_net(inp)
+                    temp = temp.unsqueeze(dim=0)
+                    temp = temp.repeat(20, 1, 1)
+                    temp = temp.permute(1, 0, 2)
+                    pout[count_fr_tot - count_fr:count_fr_tot, :] = DNN2_net(DNN1_net(AttentionModule(temp)[0]))
 
                 pred = torch.max(pout, dim=1)[1]
                 loss = cost(pout, lab.long())
@@ -337,6 +366,7 @@ for epoch in range(N_epochs):
                 epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
 
         checkpoint = {'CNN_model_par': CNN_net.state_dict(),
+                      'Attention_model_par':AttentionModule.state_dict(),
                       'DNN1_model_par': DNN1_net.state_dict(),
                       'DNN2_model_par': DNN2_net.state_dict(),
                       }
