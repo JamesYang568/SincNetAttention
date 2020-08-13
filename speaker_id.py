@@ -284,7 +284,7 @@ for epoch in range(10):  # TODO N_epochs
     # loss_totall: 4.186425685882568
     # error total: 0.8866991996765137
     # epoch3, loss_tr = 4.186426  err_tr = 0.886699
-
+    # epoch 8, loss_tr=2.998245 err_tr=0.705625 loss_te=3.797570 err_te=0.804730 err_te_snt=0.244589
     # Full Validation  new
     if epoch % N_eval_epoch == 0:  # 每8个写入到文件一下
         # os.system("pause")
