@@ -12,6 +12,7 @@ def ReadList(list_file):
     for x in lines:
         list_sig.append(x.rstrip())
     f.close()
+    
     return list_sig
 
 

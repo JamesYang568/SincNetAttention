@@ -1,8 +1,4 @@
-# speaker_id.py
-# Mirco Ravanelli
-# Mila - University of Montreal
-
-# July 2018
+# -*- coding: utf-8 -*-
 
 # Description:
 # This code performs a speaker_id experiments with SincNet.
@@ -23,22 +19,17 @@ import sys
 import numpy as np
 from dnn_models import MLP, flip
 from dnn_models import SincNet as CNN  # 注意这里CNN是指的SincNet
-from poolings import DoubleMHA
 from data_io import ReadList, read_conf, str_to_bool
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# 获取数据的函数
 def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, fact_amp):
-    # 一批大小，数据文件夹，文件名单，名单长度，宽度，字典，振幅
-    # Initialization of the minibatch (batch_size,[0=>x_t,1=>x_t+N,1=>random_samp])  随机获取128个片段
-    sig_batch = np.zeros([batch_size, wlen])  # 转换成128*wlen的矩阵
+    # Initialization of the minibatch (batch_size,[0=>x_t,1=>x_t+N,1=>random_samp])
+    sig_batch = np.zeros([batch_size, wlen])
     lab_batch = np.zeros(batch_size)
 
-    snt_id_arr = np.random.randint(N_snt, size=batch_size)  # 获取小于N_snt的128个向量
+    snt_id_arr = np.random.randint(N_snt, size=batch_size)
 
-    rand_amp_arr = np.random.uniform(1.0 - fact_amp, 1 + fact_amp, batch_size)  # 获取在振幅两侧的随机采样
+    rand_amp_arr = np.random.uniform(1.0 - fact_amp, 1 + fact_amp, batch_size)
 
     for i in range(batch_size):
 
@@ -58,11 +49,11 @@ def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, 
             print('WARNING: stereo to mono: ' + data_folder + wav_lst[snt_id_arr[i]])
             signal = signal[:, 0]
 
-        sig_batch[i, :] = signal[snt_beg:snt_end] * rand_amp_arr[i]  # 片段的内容
-        lab_batch[i] = lab_dict[wav_lst[snt_id_arr[i]]]  # 得到随机选择的片段信息dict
+        sig_batch[i, :] = signal[snt_beg:snt_end] * rand_amp_arr[i]
+        lab_batch[i] = lab_dict[wav_lst[snt_id_arr[i]]]
 
-    inp = Variable(torch.from_numpy(sig_batch).float().contiguous())
-    lab = Variable(torch.from_numpy(lab_batch).float().contiguous())
+    inp = Variable(torch.from_numpy(sig_batch).float().cuda().contiguous())
+    lab = Variable(torch.from_numpy(lab_batch).float().cuda().contiguous())
 
     return inp, lab
 
@@ -164,18 +155,12 @@ CNN_arch = {'input_dim': wlen,
             }
 
 CNN_net = CNN(CNN_arch)
-CNN_net.to(device)
-
-# 建立注意力机制 TODO
-# print(CNN_net.out_dim) 6420
-AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
-# 修改这里保证pooling中assert self.encoder_size % heads_number == 0  # d_model 可以通过
+CNN_net.cuda()
 
 # Loading label dictionary
-lab_dict = np.load(class_dict_file, allow_pickle=True).item()
+lab_dict = np.load(class_dict_file,allow_pickle=True).item()
 
-# print(CNN_net.out_dim)  6420
-DNN1_arch = {'input_dim': 321,  # CNN_net.out_dim  where 321 means after attention machine dim
+DNN1_arch = {'input_dim': CNN_net.out_dim,
              'fc_lay': fc_lay,
              'fc_drop': fc_drop,
              'fc_use_batchnorm': fc_use_batchnorm,
@@ -186,8 +171,8 @@ DNN1_arch = {'input_dim': 321,  # CNN_net.out_dim  where 321 means after attenti
              }
 
 DNN1_net = MLP(DNN1_arch)  # 三次循环
-DNN1_net.to(device)
-# print(fc_lay[-1]) 2048
+DNN1_net.cuda()
+
 DNN2_arch = {'input_dim': fc_lay[-1],
              'fc_lay': class_lay,
              'fc_drop': class_drop,
@@ -199,9 +184,9 @@ DNN2_arch = {'input_dim': fc_lay[-1],
              }
 
 DNN2_net = MLP(DNN2_arch)  # 1次循环
-DNN2_net.to(device)
+DNN2_net.cuda()
 
-# 批处理
+# 如果有做好的模型则使用做好的模型（的训练好的参数）
 if pt_file != 'none':
     checkpoint_load = torch.load(pt_file)
     CNN_net.load_state_dict(checkpoint_load['CNN_model_par'])
@@ -210,86 +195,47 @@ if pt_file != 'none':
 
 # 配置优化器 全部是用的RMSProp
 optimizer_CNN = optim.RMSprop(CNN_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
-optimizer_ATT = optim.RMSprop(AttentionModule.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN1 = optim.RMSprop(DNN1_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN2 = optim.RMSprop(DNN2_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 
 # 开始进行训练，1500次
-for epoch in range(10):  # TODO N_epochs
+for epoch in range(N_epochs):
 
     test_flag = 0
-    CNN_net.train()  # 这里因为里面包含了的dropout和batchnorm，因此需要指明是在训练还是在验证，在训练时则要.train,在验证时要.eval
-    AttentionModule.train()
-    DNN1_net.train()  # 注意要在自动forward之前
+    CNN_net.train()
+    DNN1_net.train()
     DNN2_net.train()
 
     loss_sum = 0
     err_sum = 0
 
-    for i in range(N_batches):  # 处理一批  for循环一共有800批
-        # 获取数据  batch_size = 128
+    for i in range(N_batches):  # 处理一批
         [inp, lab] = create_batches_rnd(batch_size, data_folder, wav_lst_tr, snt_tr, wlen, lab_dict, 0.2)
-
-        # 进行训练
-        output = CNN_net(inp)
-        # under deprecate
-        # print(output.shape) [128, 6420]  128条片段，每个是6420的
-        # o1, o3 = output.split([1, 1], dim=1)  # 切割列
-        # temp = torch.full((128, 1), fill_value=20,dtype = torch.int)  全为20的向量
-        # output = torch.cat((output,temp), dim=1) 这个是在现有维度上进行拼接
-        # 扩大数据，使符合条件
-        output = output.unsqueeze(dim=0)  # 得到【1,128,6420】
-        output = output.repeat(20, 1, 1)  # repeat重复对应的位置多少遍（乘以多少），如果是1则乘以1，不变。  这样得到[20,128,6420]
-        output = output.permute(1, 0, 2)  # permute交换维度，新的维度就是从左向右的，而对应位置的数字则是原来这个维度的位置
-
-        output, alignment = AttentionModule(output)  # output shape [128, 321]
-        pout = DNN2_net(DNN1_net(output))  # DNN1_net(output).shape = [128, 2048]
-        # pout.shape = [128, 462]
-        # os.system("pause")
+        pout = DNN2_net(DNN1_net(CNN_net(inp)))
 
         pred = torch.max(pout, dim=1)[1]
-        # 在分类问题中，通常需要使用max()函数对softmax函数的输出值进行操作，求出预测值索引 。
-        # 将输出最大值在向量中的索引以及最大值是谁。这里（计算准确率）不需要最大值是谁，只需要直到其索引，因此[1]
         loss = cost(pout, lab.long())
         err = torch.mean((pred != lab.long()).float())
-        # 优化
+
         optimizer_CNN.zero_grad()
-        optimizer_ATT.zero_grad()
         optimizer_DNN1.zero_grad()
         optimizer_DNN2.zero_grad()
 
         loss.backward()
         optimizer_CNN.step()
-        optimizer_ATT.step()
         optimizer_DNN1.step()
         optimizer_DNN2.step()
 
         loss_sum = loss_sum + loss.detach()
         err_sum = err_sum + err.detach()
-        # if i%10 == 0:  just for test :)
-        #     print('loss sum:' + str(loss_sum.item()))
-        #     print('err sum:' + str(err_sum.item()))
 
     loss_tot = loss_sum / N_batches
     err_tot = err_sum / N_batches
-    # print('loss_totall:' + str(loss_tot.item()))  just for test :)
-    # print('error total:' + str(err_tot.item()))
-    # 最开始是
-    # loss_totall:5.845455169677734
-    # error total:0.9918749928474426
-    # second epoch
-    # loss_totall: 5.143251895904541
-    # error total: 0.9721777439117432
-    # the 4th time
-    # loss_totall: 4.186425685882568
-    # error total: 0.8866991996765137
-    # epoch3, loss_tr = 4.186426  err_tr = 0.886699
-    # epoch 8, loss_tr=2.998245 err_tr=0.705625 loss_te=3.797570 err_te=0.804730 err_te_snt=0.244589
+
     # Full Validation  new
     if epoch % N_eval_epoch == 0:  # 每8个写入到文件一下
-        # os.system("pause")
-        CNN_net.eval()  # 说明是在验证
-        AttentionModule.eval()
+
+        CNN_net.eval()
         DNN1_net.eval()
         DNN2_net.eval()
         test_flag = 1
@@ -297,15 +243,15 @@ for epoch in range(10):  # TODO N_epochs
         err_sum = 0
         err_sum_snt = 0
 
-        with torch.no_grad():  # 由于是三个不同的模型拼装所以no_grad上下文不再自动进行梯度下降
-            for i in range(snt_te):  # 列表长度
+        with torch.no_grad():
+            for i in range(snt_te):
 
                 # [fs,signal]=scipy.io.wavfile.read(data_folder+wav_lst_te[i])
                 # signal=signal.astype(float)/32768
 
                 [signal, fs] = sf.read(data_folder + wav_lst_te[i])
 
-                signal = torch.from_numpy(signal).float().contiguous()
+                signal = torch.from_numpy(signal).float().cuda().contiguous()
                 lab_batch = lab_dict[wav_lst_te[i]]
 
                 # split signals into chunks
@@ -314,9 +260,9 @@ for epoch in range(10):  # TODO N_epochs
 
                 N_fr = int((signal.shape[0] - wlen) / (wshift))
 
-                sig_arr = torch.zeros([Batch_dev, wlen]).float().contiguous()
-                lab = Variable((torch.zeros(N_fr + 1) + lab_batch).contiguous().long())
-                pout = Variable(torch.zeros(N_fr + 1, class_lay[-1]).float().contiguous())
+                sig_arr = torch.zeros([Batch_dev, wlen]).float().cuda().contiguous()
+                lab = Variable((torch.zeros(N_fr + 1) + lab_batch).cuda().contiguous().long())
+                pout = Variable(torch.zeros(N_fr + 1, class_lay[-1]).float().cuda().contiguous())
                 count_fr = 0
                 count_fr_tot = 0
                 while end_samp < signal.shape[0]:
@@ -327,22 +273,13 @@ for epoch in range(10):  # TODO N_epochs
                     count_fr_tot = count_fr_tot + 1
                     if count_fr == Batch_dev:
                         inp = Variable(sig_arr)
-                        # norm the size
-                        temp = CNN_net(inp)
-                        temp = temp.unsqueeze(dim=0)
-                        temp = temp.repeat(20, 1, 1)
-                        temp = temp.permute(1, 0, 2)
-                        pout[count_fr_tot - Batch_dev:count_fr_tot, :] = DNN2_net(DNN1_net(AttentionModule(temp)[0]))
+                        pout[count_fr_tot - Batch_dev:count_fr_tot, :] = DNN2_net(DNN1_net(CNN_net(inp)))
                         count_fr = 0
-                        sig_arr = torch.zeros([Batch_dev, wlen]).float().contiguous()
+                        sig_arr = torch.zeros([Batch_dev, wlen]).float().cuda().contiguous()
 
                 if count_fr > 0:
                     inp = Variable(sig_arr[0:count_fr])
-                    temp = CNN_net(inp)
-                    temp = temp.unsqueeze(dim=0)
-                    temp = temp.repeat(20, 1, 1)
-                    temp = temp.permute(1, 0, 2)
-                    pout[count_fr_tot - count_fr:count_fr_tot, :] = DNN2_net(DNN1_net(AttentionModule(temp)[0]))
+                    pout[count_fr_tot - count_fr:count_fr_tot, :] = DNN2_net(DNN1_net(CNN_net(inp)))
 
                 pred = torch.max(pout, dim=1)[1]
                 loss = cost(pout, lab.long())
@@ -361,16 +298,15 @@ for epoch in range(10):  # TODO N_epochs
         print("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f" % (
             epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
 
-        with open(output_folder + "/res.res", "a") as res_file:
-            res_file.write("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f\n" % (
-                epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
-
-        checkpoint = {'CNN_model_par': CNN_net.state_dict(),
-                      'Attention_model_par':AttentionModule.state_dict(),
-                      'DNN1_model_par': DNN1_net.state_dict(),
-                      'DNN2_model_par': DNN2_net.state_dict(),
-                      }
-        torch.save(checkpoint, output_folder + '/model_raw.pkl')
+       # with open(output_folder + "/res.res", "a") as res_file:
+       #     res_file.write("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f\n" % (
+       #         epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
+       #
+       #  checkpoint = {'CNN_model_par': CNN_net.state_dict(),
+       #               'DNN1_model_par': DNN1_net.state_dict(),
+       #               'DNN2_model_par': DNN2_net.state_dict(),
+       #               }
+       #  torch.save(checkpoint, output_folder + '/model_raw.pkl')
 
     else:
         print("epoch %i, loss_tr=%f err_tr=%f" % (epoch, loss_tot, err_tot))
