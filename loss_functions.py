@@ -19,7 +19,7 @@ class AngularPenaltySMLoss(nn.Module):
         '''
         super(AngularPenaltySMLoss, self).__init__()
         loss_type = loss_type.lower()
-        assert loss_type in  ['arcface', 'sphereface', 'cosface']
+        assert loss_type in ['arcface', 'sphereface', 'cosface']
         if loss_type == 'arcface':
             self.s = 30 if not s else s
             self.m = 0.05 if not m else m
@@ -42,21 +42,25 @@ class AngularPenaltySMLoss(nn.Module):
         assert len(x) == len(labels)
         assert torch.min(labels) >= 0
         assert torch.max(labels) < self.out_features
-        
+
         for W in self.fc.parameters():
             W = F.normalize(W, p=2, dim=1)
 
         x = F.normalize(x, p=2, dim=1).cuda()
 
-        #wf = self.fc(x.cpu())
+        # wf = self.fc(x.cpu())
         if self.loss_type == 'cosface':
             numerator = (self.s * (torch.diagonal(x.transpose(0, 1)[labels]) - self.m))
         if self.loss_type == 'arcface':
-            numerator = (self.s * torch.cos(torch.acos(torch.clamp(torch.diagonal(x.transpose(0, 1)[labels]), -1.+self.eps, 1-self.eps)) + self.m))#.cuda()
+            numerator = (self.s * torch.cos(torch.acos(
+                torch.clamp(torch.diagonal(x.transpose(0, 1)[labels]), -1. + self.eps,
+                            1 - self.eps)) + self.m)).cuda()
         if self.loss_type == 'sphereface':
-            numerator = (self.s * torch.cos(self.m * torch.acos(torch.clamp(torch.diagonal(x.transpose(0, 1)[labels]), -1.+self.eps, 1-self.eps))))#.cuda()
+            numerator = (self.s * torch.cos(self.m * torch.acos(
+                torch.clamp(torch.diagonal(x.transpose(0, 1)[labels]), -1. + self.eps, 1 - self.eps)))).cuda()
 
-        excl = torch.cat([torch.cat((x[i, :y], x[i, y+1:])).unsqueeze(0) for i, y in enumerate(labels)], dim=0)#.cuda()
-        denominator = torch.exp(numerator) + torch.sum(torch.exp(self.s * excl), dim=1)#.cuda()
+        excl = torch.cat([torch.cat((x[i, :y], x[i, y + 1:])).unsqueeze(0) for i, y in enumerate(labels)],
+                         dim=0).cuda()
+        denominator = torch.exp(numerator) + torch.sum(torch.exp(self.s * excl), dim=1).cuda()
         L = numerator - torch.log(denominator)
         return -torch.mean(L)
