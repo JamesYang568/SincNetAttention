@@ -12,7 +12,6 @@ def ReadList(list_file):
     for x in lines:
         list_sig.append(x.rstrip())
     f.close()
-    
     return list_sig
 
 
@@ -73,6 +72,11 @@ def read_conf():
     options.N_batches = Config.get('optimization', 'N_batches')
     options.N_eval_epoch = Config.get('optimization', 'N_eval_epoch')
     options.seed = Config.get('optimization', 'seed')
+
+    # [loss]
+    options.loss = Config.get('loss', 'loss')
+    options.m = Config.get('loss', 'm')
+    options.s = Config.get('loss', 's')
 
     return options
 
@@ -172,4 +176,8 @@ def read_conf_inp(cfg_file):
     options.N_eval_epoch = Config.get('optimization', 'N_eval_epoch')
     options.seed = Config.get('optimization', 'seed')
 
+    # [loss]
+    options.loss = Config.get('loss', 'loss')
+    options.m = Config.get('loss', 'm')
+    options.s = Config.get('loss', 's')
     return options

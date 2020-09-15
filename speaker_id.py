@@ -14,12 +14,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-
 import sys
 import numpy as np
 from dnn_models import MLP, flip
 from dnn_models import SincNet as CNN  # 注意这里CNN是指的SincNet
 from data_io import ReadList, read_conf, str_to_bool
+from loss_functions import AngularPenaltySMLoss
 
 
 def create_batches_rnd(batch_size, data_folder, wav_lst, N_snt, wlen, lab_dict, fact_amp):
@@ -131,7 +131,8 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 
 # loss function
-cost = nn.NLLLoss()
+# cost = nn.NLLLoss()  deprecate
+cost = AngularPenaltySMLoss(128, 462, loss_type=options.loss, m=float(options.m), s=float(options.s))
 
 # Converting context and shift in samples
 wlen = int(fs * cw_len / 1000.00)
@@ -158,7 +159,7 @@ CNN_net = CNN(CNN_arch)
 CNN_net.cuda()
 
 # Loading label dictionary
-lab_dict = np.load(class_dict_file,allow_pickle=True).item()
+lab_dict = np.load(class_dict_file, allow_pickle=True).item()
 
 DNN1_arch = {'input_dim': CNN_net.out_dim,
              'fc_lay': fc_lay,
@@ -198,7 +199,7 @@ optimizer_CNN = optim.RMSprop(CNN_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN1 = optim.RMSprop(DNN1_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 optimizer_DNN2 = optim.RMSprop(DNN2_net.parameters(), lr=lr, alpha=0.95, eps=1e-8)
 
-# 开始进行训练，1500次
+# 开始进行训练
 for epoch in range(N_epochs):
 
     test_flag = 0
@@ -298,14 +299,14 @@ for epoch in range(N_epochs):
         print("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f" % (
             epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
 
-       # with open(output_folder + "/res.res", "a") as res_file:
-       #     res_file.write("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f\n" % (
-       #         epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
-       #
+        # with open(output_folder + "/res.res", "a") as res_file:
+        #     res_file.write("epoch %i, loss_tr=%f err_tr=%f loss_te=%f err_te=%f err_te_snt=%f\n" % (
+        #         epoch, loss_tot, err_tot, loss_tot_dev, err_tot_dev, err_tot_dev_snt))
+        #
         checkpoint = {'CNN_model_par': CNN_net.state_dict(),
-                     'DNN1_model_par': DNN1_net.state_dict(),
-                     'DNN2_model_par': DNN2_net.state_dict(),
-                     }
+                      'DNN1_model_par': DNN1_net.state_dict(),
+                      'DNN2_model_par': DNN2_net.state_dict(),
+                      }
         torch.save(checkpoint, output_folder + '/model_raw.pkl')
 
     else:
