@@ -51,7 +51,7 @@ class HeadAttention(nn.Module):
 
     def __narrowAttention(self, new_ht):
 
-        attention_score = torch.matmul(new_ht, self.att).squeeze()
+        attention_score = torch.matmul(new_ht, self.att.cuda()).squeeze()
         if self.training:
             attention_score = self.__maskAttention(attention_score)
         attention_score = F.softmax(attention_score, dim=-1).view(new_ht.size(0), new_ht.size(1), 1)
@@ -80,9 +80,10 @@ class HeadAttention(nn.Module):
 
 def innerKeyValueAttention(query, key, value):
     d_k = query.size(-1)
-    scores = torch.diagonal(torch.matmul(key, query) / math.sqrt(d_k), dim1=-2, dim2=-1).view(value.size(0),
-                                                                                              value.size(1),
-                                                                                              value.size(2))
+    scores = torch.diagonal(torch.matmul(key, query.cuda()) / math.sqrt(d_k), dim1=-2, dim2=-1).cuda().view(
+        value.size(0),
+        value.size(1),
+        value.size(2))
     p_attn = F.softmax(scores, dim=-2)
     weighted_vector = value * p_attn.unsqueeze(-1)
     ct = torch.sum(weighted_vector, dim=1)

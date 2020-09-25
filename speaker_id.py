@@ -1,9 +1,7 @@
+# -*- coding: utf-8 -*-
 # speaker_id.py
 # Mirco Ravanelli
 # Mila - University of Montreal
-
-# July 2018
-# -*- coding: utf-8 -*-
 
 # Description:
 # This code performs a speaker_id experiments with SincNet.
@@ -172,13 +170,12 @@ CNN_net.to(device)
 # print(CNN_net.out_dim) 6420
 AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
 # 修改这里保证pooling中assert self.encoder_size % heads_number == 0  # d_model 可以通过
-CNN_net.cuda()
 
 # Loading label dictionary
 lab_dict = np.load(class_dict_file, allow_pickle=True).item()
 
 # print(CNN_net.out_dim)  6420
-DNN1_arch = {'input_dim': CNN_net.out_dim,
+DNN1_arch = {'input_dim': 321,
              'fc_lay': fc_lay,
              'fc_drop': fc_drop,
              'fc_use_batchnorm': fc_use_batchnorm,

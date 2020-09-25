@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -5,7 +6,6 @@ import torch.nn as nn
 import sys
 from torch.autograd import Variable
 import math
-
 
 def flip(x, dim):
     xsize = x.size()
@@ -145,11 +145,10 @@ class SincConv_fast(nn.Module):
         band_pass = torch.cat([band_pass_left, band_pass_center, band_pass_right], dim=1)
 
         band_pass = band_pass / (2 * band[:, None])
-        # print(band_pass.shape) [80,251]
+
         self.filters = (band_pass).view(
             self.out_channels, 1, self.kernel_size)
 
-        # print(self.filters.shape)   [80,1,251] 即 通道个数，1，卷积核宽度
         return F.conv1d(waveforms, self.filters, stride=self.stride,
                         padding=self.padding, dilation=self.dilation,
                         bias=None, groups=1)
@@ -243,9 +242,9 @@ class LayerNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+        mean = x.mean(-1, keepdim=True).cuda()
+        std = x.std(-1, keepdim=True).cuda()
+        return self.gamma.cuda() * (x.cuda() - mean) / (std + self.eps) + self.beta.cuda()
 
 
 class MLP(nn.Module):  # 也就是DNN模型
@@ -430,10 +429,8 @@ class SincNet(nn.Module):
                 if i == 0:
                     x = self.drop[i](  # 第一层需要去取绝对值，后面不需要，这是由于不同的归一化函数决定的，laynorm没有办法正值化
                         self.act[i](self.ln[i](F.max_pool1d(torch.abs(self.conv[i](x)), self.cnn_max_pool_len[i]))))
-                    # print(x.shape) [128, 80, 983]
                 else:
                     x = self.drop[i](self.act[i](self.ln[i](F.max_pool1d(self.conv[i](x), self.cnn_max_pool_len[i]))))
-                    # print(x.shape) [128, 60, 326] -> [128, 60, 107]
 
             if self.cnn_use_batchnorm[i]:  # 使用batchnorm标准化  每一层都一样
                 x = self.drop[i](self.act[i](self.bn[i](F.max_pool1d(self.conv[i](x), self.cnn_max_pool_len[i]))))
@@ -441,5 +438,6 @@ class SincNet(nn.Module):
             if self.cnn_use_batchnorm[i] == False and self.cnn_use_laynorm[i] == False:  # 既不是  也不是
                 x = self.drop[i](self.act[i](F.max_pool1d(self.conv[i](x), self.cnn_max_pool_len[i])))
 
-        x = x.view(batch, -1) # 将通道和特征展平？？？
+        x = x.view(batch, -1)
+
         return x

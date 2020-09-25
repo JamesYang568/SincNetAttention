@@ -12,7 +12,7 @@
 
 # How to run it:
 # python TIMIT_preparation.py $TIMIT_FOLDER $OUTPUT_FOLDER data_lists/TIMIT_all.scp
-
+# python3.5 TIMIT_preparation.py timit/test normal/test data_lists/TIMIT_test.scp
 # NOTE: This script expects filenames in lowercase (e.g, train/dr1/fcjf0/si1027.wav" rather than "TRAIN/DR1/FCJF0/SI1027.WAV)
 
 # -*- coding: utf-8 -*-
