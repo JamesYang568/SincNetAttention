@@ -166,7 +166,7 @@ CNN_arch = {'input_dim': wlen,
 CNN_net = CNN(CNN_arch)
 CNN_net.to(device)
 
-# 建立注意力机制 TODO
+# 建立注意力机制
 # print(CNN_net.out_dim) 6420
 AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
 # 修改这里保证pooling中assert self.encoder_size % heads_number == 0  # d_model 可以通过
@@ -175,7 +175,7 @@ AttentionModule = DoubleMHA(CNN_net.out_dim, 20)  # 8 16 32的头数
 lab_dict = np.load(class_dict_file, allow_pickle=True).item()
 
 # print(CNN_net.out_dim)  6420
-DNN1_arch = {'input_dim': 321,
+DNN1_arch = {'input_dim': 321,  # todo 检查这里需要多少个输出
              'fc_lay': fc_lay,
              'fc_drop': fc_drop,
              'fc_use_batchnorm': fc_use_batchnorm,
